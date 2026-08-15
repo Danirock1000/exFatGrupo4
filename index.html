@@ -1,0 +1,46 @@
+<!-- index.html -->
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Simulador exFAT</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <h1>Simulador exFAT</h1>
+
+    <section>
+      <h2>Crear archivo</h2>
+      <form id="create-form">
+        <input id="file-name" type="text" placeholder="nombre.txt" required />
+        <textarea id="file-content" placeholder="contenido del archivo"></textarea>
+        <button type="submit">Crear</button>
+      </form>
+      <p id="error-message" style="color: red;"></p>
+    </section>
+
+    <section>
+      <h2>Archivos</h2>
+      <ul id="file-list"></ul>
+    </section>
+
+    <section>
+      <h2>Bitmap de clústeres</h2>
+      <div id="bitmap-grid"></div>
+    </section>
+
+    <div id="editor-overlay">
+      <div id="editor-box">
+        <h3 id="editor-title"></h3>
+        <textarea id="editor-content"></textarea>
+        <p id="editor-error"></p>
+        <div id="editor-actions">
+          <button id="editor-cancel">Cancelar</button>
+          <button id="editor-save">Guardar</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
