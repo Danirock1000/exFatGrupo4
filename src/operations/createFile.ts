@@ -1,21 +1,19 @@
 // src/operations/createFile.ts
 
-import {
-  type VirtualDisk,
-  FAT_END_OF_CHAIN,
-} from "../models/virtualDisk";
-import type { DirectoryEntry } from "../models/virtualDisk";
+import type { VirtualDisk, DirectoryEntry } from "../models/virtualDisk";
+import { resolveDirectory } from "../utils/pathResolver";
 
 export function createFile(
   disk: VirtualDisk,
+  path: string[],
   name: string,
   content: string
 ): DirectoryEntry {
-  const existing = disk.rootDirectory.find(
-    (e) => e.name === name && !e.isDeleted
-  );
+  const entries = resolveDirectory(disk, path);
+
+  const existing = entries.find((e) => e.name === name && !e.isDeleted);
   if (existing) {
-    throw new Error(`Ya existe un archivo llamado "${name}"`);
+    throw new Error(`Ya existe "${name}" en esta carpeta`);
   }
 
   const clusterSizeBytes =
@@ -32,13 +30,14 @@ export function createFile(
 
   const entry: DirectoryEntry = {
     name,
+    isDirectory: false,
     firstCluster: freeClusterIds[0],
     sizeInBytes: content.length,
     isDeleted: false,
     createdAt: Date.now(),
   };
 
-  disk.rootDirectory.push(entry);
+  entries.push(entry);
   return entry;
 }
 
@@ -60,7 +59,7 @@ export function allocateChain(disk: VirtualDisk, clusterIds: number[]): void {
     const id = clusterIds[i];
     disk.bitmap[id] = true;
     const isLast = i === clusterIds.length - 1;
-    disk.fat[id] = isLast ? FAT_END_OF_CHAIN : clusterIds[i + 1];
+    disk.fat[id] = isLast ? 0xffffffff : clusterIds[i + 1];
   }
 }
 

@@ -5,9 +5,13 @@ import { createFile } from "./operations/createFile";
 import { deleteFile } from "./operations/deleteFile";
 import { writeFile } from "./operations/writeFile";
 import { saveDisk, loadDisk } from "./persistence/persistence";
-import type { DirectoryEntry } from "./models/virtualDisk";
+import { createFolder } from "./operations/createFolder";
+import { deleteFolder } from "./operations/deleteFolder";
+
 
 const DEFAULT_CLUSTER_COUNT = 32;
+
+
 
 // Carga el disco guardado si existe; si no, formatea uno nuevo.
 export async function loadOrInitDisk(): Promise<VirtualDisk> {
@@ -20,31 +24,38 @@ export async function loadOrInitDisk(): Promise<VirtualDisk> {
 }
 
 // Envuelve createFile: ejecuta la operación pura y persiste el resultado.
-export async function createFileAndSave(
-  disk: VirtualDisk,
-  name: string,
-  content: string
-): Promise<DirectoryEntry> {
-  const entry = createFile(disk, name, content);
+// src/diskService.ts — firmas actualizadas (agregar "path: string[]" a cada una)
+
+export async function createFileAndSave(disk: VirtualDisk, path: string[], name: string, content: string) {
+  const entry = createFile(disk, path, name, content);
   await saveDisk(disk);
   return entry;
 }
 
-// Envuelve deleteFile: misma idea.
-export async function deleteFileAndSave(
-  disk: VirtualDisk,
-  name: string
-): Promise<void> {
-  deleteFile(disk, name);
+export async function createFolderAndSave(disk: VirtualDisk, path: string[], name: string) {
+  const folder = createFolder(disk, path, name);
+  await saveDisk(disk);
+  return folder;
+}
+
+export async function deleteFileAndSave(disk: VirtualDisk, path: string[], name: string) {
+  deleteFile(disk, path, name);
   await saveDisk(disk);
 }
 
-export async function writeFileAndSave(
-  disk: VirtualDisk,
-  name: string,
-  content: string
-): Promise<DirectoryEntry> {
-  const entry = writeFile(disk, name, content);
+export async function deleteFolderAndSave(disk: VirtualDisk, path: string[], name: string) {
+  deleteFolder(disk, path, name);
+  await saveDisk(disk);
+}
+
+export async function writeFileAndSave(disk: VirtualDisk, path: string[], name: string, content: string) {
+  const entry = writeFile(disk, path, name, content);
   await saveDisk(disk);
   return entry;
+}
+
+export async function reformatDiskAndSave(clusterCount: number): Promise<VirtualDisk> {
+  const disk = formatVolume(clusterCount);
+  await saveDisk(disk);
+  return disk;
 }

@@ -18,16 +18,42 @@
       </form>
       <p id="error-message" style="color: red;"></p>
     </section>
-
+<section>
+  <h2>Ubicación</h2>
+  <div id="breadcrumb"></div>
+  <form id="create-folder-form">
+    <input id="folder-name" type="text" placeholder="nombre-carpeta" required />
+    <button type="submit">Crear carpeta</button>
+  </form>
+</section>
     <section>
       <h2>Archivos</h2>
       <ul id="file-list"></ul>
     </section>
 
     <section>
+  <h2>Reformatear volumen</h2>
+  <label for="cluster-count">Cantidad de clústeres</label>
+  <input id="cluster-count" type="number" value="32" min="4" max="256" />
+  <button id="reformat-btn">Reformatear (borra todo)</button>
+</section>
+    <section>
+  <h2>Respaldo del disco</h2>
+  <button id="export-btn">Exportar disco (.json)</button>
+  <input id="import-input" type="file" accept="application/json" style="display: none;" />
+  <button id="import-btn">Importar disco</button>
+  <p id="import-error" style="color: red;"></p>
+</section>
+    <section>
       <h2>Bitmap de clústeres</h2>
-      <div id="bitmap-grid"></div>
-    </section>
+  <div id="bitmap-grid"></div>
+  <div id="bitmap-legend"></div>
+</section>
+
+<section>
+  <h2>Cadena FAT por archivo</h2>
+  <div id="fat-chains"></div>
+</section>
 
     <div id="editor-overlay">
       <div id="editor-box">

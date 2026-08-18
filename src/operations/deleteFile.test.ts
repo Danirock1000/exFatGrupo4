@@ -1,9 +1,4 @@
-// src/operations/deleteFile.ts
-
-import type { VirtualDisk } from "../models/virtualDisk";
-import { FAT_FREE } from "../models/virtualDisk";
 import { resolveDirectory } from "../utils/pathResolver";
-import { getClusterChain } from "../utils/clusterChain";
 
 export function deleteFile(disk: VirtualDisk, path: string[], name: string): void {
   const entries = resolveDirectory(disk, path);

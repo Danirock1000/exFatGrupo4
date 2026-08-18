@@ -11,11 +11,13 @@ export interface Cluster {
 }
 
 export interface DirectoryEntry {
-  name: string; 
-  firstCluster: number;
-  sizeInBytes: number;
+  name: string;
+  isDirectory: boolean;
+  firstCluster: number;   // -1 para carpetas, no usan clústeres propios
+  sizeInBytes: number;    // 0 para carpetas
   isDeleted: boolean;
   createdAt: number;
+  children?: DirectoryEntry[]; // solo presente si isDirectory === true
 }
 
 export interface VirtualDisk {
