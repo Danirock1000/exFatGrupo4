@@ -29,8 +29,10 @@ export interface VirtualDisk {
   // apunta a la cadena que contiene el listado raíz, igual que cualquier carpeta.
 }
 
-export function formatVolume(clusterCount: number): VirtualDisk {
-  const bootSector = createBootSector(clusterCount);
+// src/models/virtualDisk.ts — formatVolume actualizado
+
+export function formatVolume(clusterCount: number, sectorsPerCluster: number = 8): VirtualDisk {
+  const bootSector = createBootSector(clusterCount, sectorsPerCluster);
   const fat = new Array(clusterCount).fill(FAT_FREE);
   const bitmap = new Array(clusterCount).fill(false);
   const clusters: Cluster[] = Array.from({ length: clusterCount }, (_, id) => ({ id, data: "" }));
@@ -40,7 +42,6 @@ export function formatVolume(clusterCount: number): VirtualDisk {
   fat[0] = FAT_END_OF_CHAIN;
   fat[1] = FAT_END_OF_CHAIN;
 
-  // el directorio raíz también necesita su propio clúster, con un listado vacío
   const rootClusterId = 2;
   bitmap[rootClusterId] = true;
   fat[rootClusterId] = FAT_END_OF_CHAIN;

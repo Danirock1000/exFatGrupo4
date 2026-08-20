@@ -7,6 +7,7 @@ import { writeFile } from "./operations/writeFile";
 import { saveDisk, loadDisk } from "./persistence/persistence";
 import { createFolder } from "./operations/createFolder";
 import { deleteFolder } from "./operations/deleteFolder";
+import { renameEntry } from "./operations/renameEntry";
 
 
 const DEFAULT_CLUSTER_COUNT = 32;
@@ -54,8 +55,19 @@ export async function writeFileAndSave(disk: VirtualDisk, path: string[], name: 
   return entry;
 }
 
-export async function reformatDiskAndSave(clusterCount: number): Promise<VirtualDisk> {
-  const disk = formatVolume(clusterCount);
+export async function reformatDiskAndSave(clusterCount: number, sectorsPerCluster: number): Promise<VirtualDisk> {
+  const disk = formatVolume(clusterCount, sectorsPerCluster);
   await saveDisk(disk);
   return disk;
+}
+
+
+export async function renameEntryAndSave(
+  disk: VirtualDisk,
+  path: string[],
+  oldName: string,
+  newName: string
+): Promise<void> {
+  renameEntry(disk, path, oldName, newName);
+  await saveDisk(disk);
 }

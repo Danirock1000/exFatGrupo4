@@ -1,3 +1,5 @@
+// src/main.ts
+
 import type { VirtualDisk, DirectoryEntry } from "./models/virtualDisk";
 import {
   loadOrInitDisk,
@@ -7,6 +9,7 @@ import {
   createFolderAndSave,
   deleteFolderAndSave,
   reformatDiskAndSave,
+  renameEntryAndSave,
 } from "./diskService";
 import { readFile } from "./operations/readFile";
 import { getClusterChain } from "./utils/clusterChain";
@@ -16,26 +19,38 @@ import { saveDisk } from "./persistence/persistence";
 
 let disk: VirtualDisk;
 let currentPath: string[] = [];
+let pathHistory: string[][] = [];
 let editingFileName: string | null = null;
+let renamingFolderName: string | null = null;
 
 const FILE_COLORS = [
-  "#378ADD", // azul
-  "#D85A30", // coral
-  "#639922", // verde
-  "#BA7517", // ámbar
-  "#993556", // rosa
-  "#534AB7", // morado
+  "#378ADD", "#D85A30", "#639922", "#BA7517", "#993556", "#534AB7",
 ];
 const RESERVED_COLOR = "#888780";
 const FREE_COLOR = "#5DCAA5";
+
+// ---------------------------------------------------------------------
+// Init
+// ---------------------------------------------------------------------
 
 async function init() {
   disk = await loadOrInitDisk();
   setupTabs();
   render();
 
-  document.getElementById("create-form")!.addEventListener("submit", handleCreate);
-  document.getElementById("create-folder-form")!.addEventListener("submit", handleCreateFolder);
+  document.getElementById("back-btn")!.addEventListener("click", handleBack);
+
+  document.getElementById("open-create-folder-btn")!.addEventListener("click", openCreateFolderModal);
+  document.getElementById("create-folder-cancel")!.addEventListener("click", closeCreateFolderModal);
+  document.getElementById("create-folder-confirm")!.addEventListener("click", handleConfirmCreateFolder);
+
+  document.getElementById("open-create-file-btn")!.addEventListener("click", openCreateFileModal);
+  document.getElementById("create-file-cancel")!.addEventListener("click", closeCreateFileModal);
+  document.getElementById("create-file-confirm")!.addEventListener("click", handleConfirmCreateFile);
+
+  document.getElementById("rename-cancel")!.addEventListener("click", closeRenameModal);
+  document.getElementById("rename-confirm")!.addEventListener("click", handleConfirmRename);
+
   document.getElementById("editor-cancel")!.addEventListener("click", closeEditor);
   document.getElementById("editor-save")!.addEventListener("click", handleSave);
 
@@ -45,45 +60,137 @@ async function init() {
   });
   document.getElementById("import-input")!.addEventListener("change", handleImport);
 
+  document.getElementById("capacity-input")!.addEventListener("input", updateCapacityPreview);
+  document.getElementById("capacity-unit")!.addEventListener("change", updateCapacityPreview);
+  document.getElementById("allocation-unit-select")!.addEventListener("change", updateCapacityPreview);
+  updateCapacityPreview();
+
   document.getElementById("reformat-btn")!.addEventListener("click", handleReformat);
 }
 
+function setupTabs() {
+  const buttons = document.querySelectorAll<HTMLButtonElement>(".tab-btn");
+  const panels = document.querySelectorAll<HTMLDivElement>(".tab-panel");
+
+  buttons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      buttons.forEach((b) => b.classList.remove("active"));
+      panels.forEach((p) => p.classList.remove("active"));
+      btn.classList.add("active");
+      document.getElementById(`tab-${btn.dataset.tab}`)!.classList.add("active");
+    });
+  });
+}
+
+// ---------------------------------------------------------------------
+// Navegación
+// ---------------------------------------------------------------------
+
 function navigateTo(path: string[]) {
+  pathHistory.push(currentPath);
   currentPath = path;
   render();
 }
 
-async function handleCreate(e: Event) {
-  e.preventDefault();
-  const nameInput = document.getElementById("file-name") as HTMLInputElement;
-  const contentInput = document.getElementById("file-content") as HTMLTextAreaElement;
-  const errorEl = document.getElementById("error-message")!;
-  errorEl.textContent = "";
-
-  try {
-    await createFileAndSave(disk, currentPath, nameInput.value, contentInput.value);
-    nameInput.value = "";
-    contentInput.value = "";
-    render();
-  } catch (err) {
-    errorEl.textContent = (err as Error).message;
-  }
+function handleBack() {
+  if (pathHistory.length === 0) return;
+  currentPath = pathHistory.pop()!;
+  render();
 }
 
-async function handleCreateFolder(e: Event) {
-  e.preventDefault();
-  const input = document.getElementById("folder-name") as HTMLInputElement;
-  const errorEl = document.getElementById("error-message")!;
-  errorEl.textContent = "";
+function arraysEqual(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((v, i) => v === b[i]);
+}
+
+// ---------------------------------------------------------------------
+// Modal: crear carpeta
+// ---------------------------------------------------------------------
+
+function openCreateFolderModal() {
+  (document.getElementById("new-folder-name") as HTMLInputElement).value = "";
+  document.getElementById("create-folder-error")!.textContent = "";
+  document.getElementById("create-folder-overlay")!.classList.add("open");
+}
+
+function closeCreateFolderModal() {
+  document.getElementById("create-folder-overlay")!.classList.remove("open");
+}
+
+async function handleConfirmCreateFolder() {
+  const input = document.getElementById("new-folder-name") as HTMLInputElement;
+  const errorEl = document.getElementById("create-folder-error")!;
 
   try {
     await createFolderAndSave(disk, currentPath, input.value);
-    input.value = "";
+    closeCreateFolderModal();
     render();
   } catch (err) {
     errorEl.textContent = (err as Error).message;
   }
 }
+
+// ---------------------------------------------------------------------
+// Modal: crear archivo
+// ---------------------------------------------------------------------
+
+function openCreateFileModal() {
+  (document.getElementById("new-file-name") as HTMLInputElement).value = "";
+  (document.getElementById("new-file-content") as HTMLTextAreaElement).value = "";
+  document.getElementById("create-file-error")!.textContent = "";
+  document.getElementById("create-file-overlay")!.classList.add("open");
+}
+
+function closeCreateFileModal() {
+  document.getElementById("create-file-overlay")!.classList.remove("open");
+}
+
+async function handleConfirmCreateFile() {
+  const nameInput = document.getElementById("new-file-name") as HTMLInputElement;
+  const contentInput = document.getElementById("new-file-content") as HTMLTextAreaElement;
+  const errorEl = document.getElementById("create-file-error")!;
+
+  try {
+    await createFileAndSave(disk, currentPath, nameInput.value, contentInput.value);
+    closeCreateFileModal();
+    render();
+  } catch (err) {
+    errorEl.textContent = (err as Error).message;
+  }
+}
+
+// ---------------------------------------------------------------------
+// Modal: renombrar
+// ---------------------------------------------------------------------
+
+function openRenameModal(name: string) {
+  renamingFolderName = name;
+  (document.getElementById("rename-input") as HTMLInputElement).value = name;
+  document.getElementById("rename-error")!.textContent = "";
+  document.getElementById("rename-overlay")!.classList.add("open");
+}
+
+function closeRenameModal() {
+  renamingFolderName = null;
+  document.getElementById("rename-overlay")!.classList.remove("open");
+}
+
+async function handleConfirmRename() {
+  if (!renamingFolderName) return;
+  const input = document.getElementById("rename-input") as HTMLInputElement;
+  const errorEl = document.getElementById("rename-error")!;
+
+  try {
+    await renameEntryAndSave(disk, currentPath, renamingFolderName, input.value);
+    closeRenameModal();
+    render();
+  } catch (err) {
+    errorEl.textContent = (err as Error).message;
+  }
+}
+
+// ---------------------------------------------------------------------
+// Borrar archivo / carpeta
+// ---------------------------------------------------------------------
 
 async function handleDeleteFile(name: string) {
   await deleteFileAndSave(disk, currentPath, name);
@@ -94,6 +201,10 @@ async function handleDeleteFolder(name: string) {
   await deleteFolderAndSave(disk, currentPath, name);
   render();
 }
+
+// ---------------------------------------------------------------------
+// Editor de archivo (.txt)
+// ---------------------------------------------------------------------
 
 function openEditor(name: string) {
   editingFileName = name;
@@ -125,6 +236,10 @@ async function handleSave() {
   }
 }
 
+// ---------------------------------------------------------------------
+// Respaldo (export / import)
+// ---------------------------------------------------------------------
+
 function handleExport() {
   exportDiskToFile(disk);
 }
@@ -140,6 +255,7 @@ async function handleImport(e: Event) {
   try {
     disk = await importDiskFromFile(file);
     currentPath = [];
+    pathHistory = [];
     await saveDisk(disk);
     render();
   } catch (err) {
@@ -149,33 +265,68 @@ async function handleImport(e: Event) {
   }
 }
 
+// ---------------------------------------------------------------------
+// Configuración de disco (formateo)
+// ---------------------------------------------------------------------
+
+function getClusterSizeBytes(): number {
+  const select = document.getElementById("allocation-unit-select") as HTMLSelectElement;
+  return Number(select.value);
+}
+
+function getCapacityBytes(): number {
+  const capacityInput = document.getElementById("capacity-input") as HTMLInputElement;
+  const unitSelect = document.getElementById("capacity-unit") as HTMLSelectElement;
+  return Number(capacityInput.value) * Number(unitSelect.value);
+}
+
+function updateCapacityPreview() {
+  const capacityBytes = getCapacityBytes();
+  const clusterSizeBytes = getClusterSizeBytes();
+  const clusterCount = Math.max(4, Math.floor(capacityBytes / clusterSizeBytes));
+
+  document.getElementById("capacity-preview")!.textContent =
+    `≈ ${clusterCount} clústeres de ${clusterSizeBytes} bytes cada uno`;
+}
+
 async function handleReformat() {
-  const slider = document.getElementById("cluster-count-slider") as HTMLInputElement;
-  const clusterCount = Number(slider.value);
+  const clusterSizeBytes = getClusterSizeBytes();
+  const capacityBytes = getCapacityBytes();
+  const clusterCount = Math.max(4, Math.floor(capacityBytes / clusterSizeBytes));
+  const sectorsPerCluster = clusterSizeBytes / 512;
 
   const confirmed = confirm(
-    `Esto borrará todos los archivos actuales y creará un volumen nuevo de ${clusterCount} clústeres. ¿Continuar?`
+    `Esto borrará todos los archivos actuales y creará un volumen nuevo de ${clusterCount} clústeres (${clusterSizeBytes} bytes cada uno). ¿Continuar?`
   );
   if (!confirmed) return;
 
-  disk = await reformatDiskAndSave(clusterCount);
+  disk = await reformatDiskAndSave(clusterCount, sectorsPerCluster);
   currentPath = [];
+  pathHistory = [];
   render();
 }
+
+// ---------------------------------------------------------------------
+// Render
+// ---------------------------------------------------------------------
 
 function render() {
   renderBreadcrumb();
   renderFileList();
+  renderFolderTree();
   renderBitmap();
   renderFatChains();
 }
 
 function renderBreadcrumb() {
+  const backBtn = document.getElementById("back-btn") as HTMLButtonElement;
+  backBtn.disabled = pathHistory.length === 0;
+
   const el = document.getElementById("breadcrumb")!;
   el.innerHTML = "";
 
   const rootSpan = document.createElement("span");
-  rootSpan.textContent = "raíz";
+  rootSpan.textContent = "Raíz";
   rootSpan.onclick = () => navigateTo([]);
   el.appendChild(rootSpan);
 
@@ -209,6 +360,11 @@ function renderFileList() {
       nameBtn.onclick = () => navigateTo([...currentPath, entry.name]);
       li.appendChild(nameBtn);
 
+      const renameBtn = document.createElement("button");
+      renameBtn.textContent = "Renombrar";
+      renameBtn.onclick = () => openRenameModal(entry.name);
+      li.appendChild(renameBtn);
+
       const deleteBtn = document.createElement("button");
       deleteBtn.textContent = "Borrar";
       deleteBtn.onclick = () => handleDeleteFolder(entry.name);
@@ -231,6 +387,70 @@ function renderFileList() {
 
     list.appendChild(li);
   }
+}
+
+function renderFolderTree() {
+  const container = document.getElementById("folder-tree")!;
+  container.innerHTML = "";
+
+  const rootFolders = listDirectory(disk, []).filter((e) => e.isDirectory && !e.isDeleted);
+  container.appendChild(buildFolderTreeNode(rootFolders, []));
+}
+
+function buildFolderTreeNode(folders: DirectoryEntry[], parentPath: string[]): HTMLElement {
+  const ul = document.createElement("ul");
+  ul.className = "folder-tree-list";
+
+  for (const folder of folders) {
+    const itemPath = [...parentPath, folder.name];
+    const li = document.createElement("li");
+
+    const row = document.createElement("div");
+    row.className = "folder-tree-row";
+    if (arraysEqual(itemPath, currentPath)) row.classList.add("active");
+
+    const toggle = document.createElement("span");
+    toggle.className = "folder-tree-toggle";
+    toggle.textContent = "▸";
+
+    const label = document.createElement("span");
+    label.className = "folder-tree-label";
+    label.textContent = folder.name;
+    label.onclick = () => navigateTo(itemPath);
+
+    row.appendChild(toggle);
+    row.appendChild(label);
+    li.appendChild(row);
+
+    const childrenContainer = document.createElement("div");
+    childrenContainer.style.display = "none";
+    li.appendChild(childrenContainer);
+
+    let expanded = false;
+    toggle.onclick = () => {
+      expanded = !expanded;
+      toggle.textContent = expanded ? "▾" : "▸";
+      childrenContainer.style.display = expanded ? "block" : "none";
+
+      if (expanded && childrenContainer.childElementCount === 0) {
+        const subfolders = listDirectory(disk, itemPath).filter(
+          (e) => e.isDirectory && !e.isDeleted
+        );
+        if (subfolders.length > 0) {
+          childrenContainer.appendChild(buildFolderTreeNode(subfolders, itemPath));
+        } else {
+          const empty = document.createElement("div");
+          empty.className = "folder-tree-empty";
+          empty.textContent = "sin subcarpetas";
+          childrenContainer.appendChild(empty);
+        }
+      }
+    };
+
+    ul.appendChild(li);
+  }
+
+  return ul;
 }
 
 function buildClusterOwnerMap(allFiles: DirectoryEntry[]): Map<number, string> {
@@ -269,7 +489,7 @@ function renderBitmap() {
     } else {
       const owner = ownerMap.get(id);
       cell.style.backgroundColor = owner ? colorForFile(allFiles, owner) : "#D85A30";
-      cell.title = owner ? `Clúster ${id}: ${owner}` : `Clúster ${id}: ocupado`;
+      cell.title = owner ? `Clúster ${id}: ${owner}` : `Clúster ${id}: ocupado (directorio)`;
     }
 
     grid.appendChild(cell);
@@ -343,21 +563,5 @@ function renderFatChains() {
     container.appendChild(row);
   }
 }
-
-function setupTabs() {
-  const buttons = document.querySelectorAll<HTMLButtonElement>(".tab-btn");
-  const panels = document.querySelectorAll<HTMLDivElement>(".tab-panel");
-
-  buttons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      buttons.forEach((b) => b.classList.remove("active"));
-      panels.forEach((p) => p.classList.remove("active"));
-
-      btn.classList.add("active");
-      document.getElementById(`tab-${btn.dataset.tab}`)!.classList.add("active");
-    });
-  });
-}
-
 
 init();
