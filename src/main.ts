@@ -17,6 +17,8 @@ import { listDirectory, collectAllFiles, collectTreeStats } from "./utils/pathRe
 import { summarizeFragmentation } from "./utils/fragmentation";
 import { exportDiskToFile, importDiskFromFile } from "./persistence/exportImport";
 import { saveDisk } from "./persistence/persistence";
+import { analyzeFragmentation } from "./utils/fragmentation";
+
 
 let disk: VirtualDisk;
 let currentPath: string[] = [];
@@ -68,6 +70,7 @@ async function init() {
 
   document.getElementById("reformat-btn")!.addEventListener("click", handleReformat);
   document.getElementById("editor-delete")!.addEventListener("click", handleEditorDelete);
+  document.getElementById("properties-close")!.addEventListener("click", closePropertiesModal);
 }
 
 function setupTabs() {
@@ -495,6 +498,15 @@ function renderFileList() {
       deleteBtn.onclick = () => handleDeleteFolder(entry.name);
       li.appendChild(deleteBtn);
 } else {
+const propsBtn = document.createElement("button");
+  propsBtn.innerHTML = `<i class="ti ti-info-circle"></i>`;
+  propsBtn.title = "Propiedades";
+  propsBtn.onclick = (e) => {
+    e.stopPropagation();
+    openPropertiesModal(entry.name);
+  };
+  li.appendChild(propsBtn);
+
   const nameSpan = document.createElement("span");
   nameSpan.textContent = `${entry.name} — ${entry.sizeInBytes} bytes — clúster ${entry.firstCluster}`;
   nameSpan.style.cursor = "pointer";
@@ -680,6 +692,48 @@ function renderFatChains() {
 
     container.appendChild(row);
   }
+}
+
+function openPropertiesModal(name: string) {
+  const entries = listDirectory(disk, currentPath);
+  const entry = entries.find((e) => e.name === name && !e.isDirectory && !e.isDeleted);
+  if (!entry) return;
+
+  const chain = getClusterChain(disk, entry.firstCluster);
+  const fragInfo = analyzeFragmentation(disk, entry);
+  const clusterSizeBytes = disk.bootSector.bytesPerSector * disk.bootSector.sectorsPerCluster;
+  const path = currentPath.length === 0 ? "Raíz" : `Raíz / ${currentPath.join(" / ")}`;
+  const created = new Date(entry.createdAt).toLocaleString();
+
+  const dl = document.getElementById("properties-content")!;
+  dl.innerHTML = "";
+
+  const fields: [string, string][] = [
+    ["Nombre", entry.name],
+    ["Ubicación", path],
+    ["Tamaño", `${formatBytes(entry.sizeInBytes)} (${entry.sizeInBytes} bytes)`],
+    ["Clústeres ocupados", String(chain.length)],
+    ["Tamaño por clúster", formatBytes(clusterSizeBytes)],
+    ["Primer clúster", String(entry.firstCluster)],
+    ["Cadena de clústeres", chain.join(" → ") + " → EOF"],
+    ["Estado de fragmentación", fragInfo.isContiguous ? "Contiguo" : `Fragmentado (${fragInfo.fragmentCount} fragmentos)`],
+    ["Creado", created],
+  ];
+
+  for (const [label, value] of fields) {
+    const dt = document.createElement("dt");
+    dt.textContent = label;
+    const dd = document.createElement("dd");
+    dd.textContent = value;
+    dl.appendChild(dt);
+    dl.appendChild(dd);
+  }
+
+  document.getElementById("properties-overlay")!.classList.add("open");
+}
+
+function closePropertiesModal() {
+  document.getElementById("properties-overlay")!.classList.remove("open");
 }
 
 
