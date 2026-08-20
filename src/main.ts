@@ -507,11 +507,11 @@ const propsBtn = document.createElement("button");
   };
   li.appendChild(propsBtn);
 
-  const nameSpan = document.createElement("span");
-  nameSpan.textContent = `${entry.name} — ${entry.sizeInBytes} bytes — clúster ${entry.firstCluster}`;
-  nameSpan.style.cursor = "pointer";
-  nameSpan.onclick = () => openEditor(entry.name);
-  li.appendChild(nameSpan);
+const nameSpan = document.createElement("span");
+nameSpan.textContent = entry.name;
+nameSpan.style.cursor = "pointer";
+nameSpan.onclick = () => openEditor(entry.name);
+li.appendChild(nameSpan);
 }
 
     list.appendChild(li);
