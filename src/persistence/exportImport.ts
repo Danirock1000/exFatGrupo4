@@ -40,11 +40,14 @@ export function importDiskFromFile(file: File): Promise<VirtualDisk> {
 function isValidDisk(obj: unknown): obj is VirtualDisk {
   if (typeof obj !== "object" || obj === null) return false;
   const disk = obj as Record<string, unknown>;
+
+  if (typeof disk.bootSector !== "object" || disk.bootSector === null) return false;
+  const bootSector = disk.bootSector as Record<string, unknown>;
+
   return (
     Array.isArray(disk.fat) &&
     Array.isArray(disk.bitmap) &&
     Array.isArray(disk.clusters) &&
-    Array.isArray(disk.rootDirectory) &&
-    typeof disk.bootSector === "object"
+    typeof bootSector.firstClusterOfRootDirectory === "number"
   );
 }
