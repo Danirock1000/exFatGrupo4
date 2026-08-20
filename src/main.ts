@@ -1,6 +1,4 @@
-// src/main.ts
-
-import type { VirtualDisk } from "./models/virtualDisk";
+import type { VirtualDisk, DirectoryEntry } from "./models/virtualDisk";
 import {
   loadOrInitDisk,
   createFileAndSave,
@@ -12,10 +10,9 @@ import {
 } from "./diskService";
 import { readFile } from "./operations/readFile";
 import { getClusterChain } from "./utils/clusterChain";
-import { resolveDirectory, collectAllFiles } from "./utils/pathResolver";
+import { listDirectory, collectAllFiles } from "./utils/pathResolver";
 import { exportDiskToFile, importDiskFromFile } from "./persistence/exportImport";
 import { saveDisk } from "./persistence/persistence";
-import type { DirectoryEntry } from "./models/virtualDisk";
 
 let disk: VirtualDisk;
 let currentPath: string[] = [];
@@ -34,6 +31,7 @@ const FREE_COLOR = "#5DCAA5";
 
 async function init() {
   disk = await loadOrInitDisk();
+  setupTabs();
   render();
 
   document.getElementById("create-form")!.addEventListener("submit", handleCreate);
@@ -152,13 +150,8 @@ async function handleImport(e: Event) {
 }
 
 async function handleReformat() {
-  const input = document.getElementById("cluster-count") as HTMLInputElement;
-  const clusterCount = parseInt(input.value, 10);
-
-  if (isNaN(clusterCount) || clusterCount < 4) {
-    alert("Ingresa una cantidad válida de clústeres (mínimo 4).");
-    return;
-  }
+  const slider = document.getElementById("cluster-count-slider") as HTMLInputElement;
+  const clusterCount = Number(slider.value);
 
   const confirmed = confirm(
     `Esto borrará todos los archivos actuales y creará un volumen nuevo de ${clusterCount} clústeres. ¿Continuar?`
@@ -199,7 +192,7 @@ function renderFileList() {
   const list = document.getElementById("file-list")!;
   list.innerHTML = "";
 
-  const entries = resolveDirectory(disk, currentPath).filter((e) => !e.isDeleted);
+  const entries = listDirectory(disk, currentPath).filter((e) => !e.isDeleted);
 
   for (const entry of entries) {
     const li = document.createElement("li");
@@ -259,7 +252,7 @@ function renderBitmap() {
   const grid = document.getElementById("bitmap-grid")!;
   grid.innerHTML = "";
 
-  const allFiles = collectAllFiles(disk.rootDirectory);
+  const allFiles = collectAllFiles(disk);
   const ownerMap = buildClusterOwnerMap(allFiles);
 
   disk.bitmap.forEach((occupied, id) => {
@@ -310,7 +303,7 @@ function renderFatChains() {
   const container = document.getElementById("fat-chains")!;
   container.innerHTML = "";
 
-  const allFiles = collectAllFiles(disk.rootDirectory);
+  const allFiles = collectAllFiles(disk);
 
   if (allFiles.length === 0) {
     container.textContent = "Sin archivos todavía.";
@@ -350,5 +343,21 @@ function renderFatChains() {
     container.appendChild(row);
   }
 }
+
+function setupTabs() {
+  const buttons = document.querySelectorAll<HTMLButtonElement>(".tab-btn");
+  const panels = document.querySelectorAll<HTMLDivElement>(".tab-panel");
+
+  buttons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      buttons.forEach((b) => b.classList.remove("active"));
+      panels.forEach((p) => p.classList.remove("active"));
+
+      btn.classList.add("active");
+      document.getElementById(`tab-${btn.dataset.tab}`)!.classList.add("active");
+    });
+  });
+}
+
 
 init();

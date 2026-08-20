@@ -2,7 +2,7 @@
 
 import type { VirtualDisk, DirectoryEntry } from "../models/virtualDisk";
 import { FAT_FREE } from "../models/virtualDisk";
-import { resolveDirectory } from "../utils/pathResolver";
+import { listDirectory, saveDirectory } from "../utils/pathResolver";
 import { getClusterChain } from "../utils/clusterChain";
 import { findFreeClusters, allocateChain, writeContent } from "./createFile";
 
@@ -12,7 +12,7 @@ export function writeFile(
   name: string,
   newContent: string
 ): DirectoryEntry {
-  const entries = resolveDirectory(disk, path);
+  const entries = listDirectory(disk, path);
   const entry = entries.find((e) => e.name === name && !e.isDirectory && !e.isDeleted);
   if (!entry) {
     throw new Error(`No se encontró un archivo llamado "${name}"`);
@@ -39,5 +39,6 @@ export function writeFile(
   entry.firstCluster = freeClusterIds[0];
   entry.sizeInBytes = newContent.length;
 
+  saveDirectory(disk, path, entries);
   return entry;
 }

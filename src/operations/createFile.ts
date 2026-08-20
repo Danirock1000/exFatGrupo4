@@ -1,43 +1,29 @@
 // src/operations/createFile.ts
 
 import type { VirtualDisk, DirectoryEntry } from "../models/virtualDisk";
-import { resolveDirectory } from "../utils/pathResolver";
+import { listDirectory, saveDirectory } from "../utils/pathResolver";
 
-export function createFile(
-  disk: VirtualDisk,
-  path: string[],
-  name: string,
-  content: string
-): DirectoryEntry {
-  const entries = resolveDirectory(disk, path);
-
-  const existing = entries.find((e) => e.name === name && !e.isDeleted);
-  if (existing) {
+export function createFile(disk: VirtualDisk, path: string[], name: string, content: string): DirectoryEntry {
+  const entries = listDirectory(disk, path);
+  if (entries.find((e) => e.name === name && !e.isDeleted)) {
     throw new Error(`Ya existe "${name}" en esta carpeta`);
   }
 
-  const clusterSizeBytes =
-    disk.bootSector.bytesPerSector * disk.bootSector.sectorsPerCluster;
+  const clusterSizeBytes = disk.bootSector.bytesPerSector * disk.bootSector.sectorsPerCluster;
   const clustersNeeded = Math.max(1, Math.ceil(content.length / clusterSizeBytes));
-
   const freeClusterIds = findFreeClusters(disk, clustersNeeded);
-  if (freeClusterIds.length < clustersNeeded) {
-    throw new Error("No hay espacio suficiente en el disco");
-  }
+  if (freeClusterIds.length < clustersNeeded) throw new Error("No hay espacio suficiente en el disco");
 
   allocateChain(disk, freeClusterIds);
   writeContent(disk, freeClusterIds, content, clusterSizeBytes);
 
   const entry: DirectoryEntry = {
-    name,
-    isDirectory: false,
-    firstCluster: freeClusterIds[0],
-    sizeInBytes: content.length,
-    isDeleted: false,
-    createdAt: Date.now(),
+    name, isDirectory: false, firstCluster: freeClusterIds[0],
+    sizeInBytes: content.length, isDeleted: false, createdAt: Date.now(),
   };
 
   entries.push(entry);
+  saveDirectory(disk, path, entries);
   return entry;
 }
 

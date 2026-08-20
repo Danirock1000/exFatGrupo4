@@ -164,3 +164,38 @@ section {
 .entry-icon {
   margin-right: 6px;
 }
+
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 1px solid #ddd;
+  margin-bottom: 1.5rem;
+}
+
+.tab-btn {
+  background: none;
+  border: none;
+  padding: 0.6rem 1rem;
+  font-size: 1rem;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  color: #555;
+}
+
+.tab-btn.active {
+  border-bottom-color: #378ADD;
+  color: #111;
+  font-weight: bold;
+}
+
+.tab-panel {
+  display: none;
+}
+
+.tab-panel.active {
+  display: block;
+}
+
+.error-text {
+  color: #b02a2a;
+}

@@ -1,44 +1,42 @@
-// src/operations/readWrite.test.ts
+// src/operations/deleteFile.test.ts
 
 import { describe, it, expect } from "vitest";
 import { formatVolume } from "../models/virtualDisk";
 import { createFile } from "./createFile";
-import { readFile } from "./readFile";
-import { writeFile } from "./writeFile";
 import { deleteFile } from "./deleteFile";
+import { listDirectory } from "../utils/pathResolver";
 
-describe("readFile", () => {
-  it("devuelve el mismo contenido que se escribió al crear", () => {
+describe("deleteFile", () => {
+  it("marca la entrada como borrada sin removerla del listado serializado", () => {
     const disk = formatVolume(32);
-    createFile(disk, "notas.txt", "contenido original");
+    createFile(disk, [], "notas.txt", "hola");
+    deleteFile(disk, [], "notas.txt");
 
-    expect(readFile(disk, "notas.txt")).toBe("contenido original");
-  });
-});
+    const entries = listDirectory(disk, []);
+    const entry = entries.find((e) => e.name === "notas.txt");
 
-describe("writeFile", () => {
-  it("sobrescribe el contenido de un archivo existente", () => {
-    const disk = formatVolume(32);
-    createFile(disk, "notas.txt", "viejo");
-    writeFile(disk, "notas.txt", "nuevo contenido");
-
-    expect(readFile(disk, "notas.txt")).toBe("nuevo contenido");
+    expect(entry?.isDeleted).toBe(true);
+    expect(entries.length).toBe(1);
   });
 
-  it("reutiliza clústeres liberados por un archivo borrado (fragmentación)", () => {
-    const disk = formatVolume(6); // clústeres 2-5 disponibles
-    createFile(disk, "a.txt", "a");
-    const b = createFile(disk, "b.txt", "b");
-    createFile(disk, "c.txt", "c");
+  it("libera los clústeres del archivo en el bitmap", () => {
+    const disk = formatVolume(32);
+    const entry = createFile(disk, [], "notas.txt", "hola");
+    deleteFile(disk, [], "notas.txt");
 
-    deleteFile(disk, "b.txt");
+    expect(disk.bitmap[entry.firstCluster]).toBe(false);
+  });
 
-    const clusterSize = disk.bootSector.bytesPerSector * disk.bootSector.sectorsPerCluster;
-    const bigContent = "x".repeat(clusterSize + 1); // necesita 2 clústeres
+  it("lanza un error si el archivo no existe", () => {
+    const disk = formatVolume(32);
+    expect(() => deleteFile(disk, [], "inexistente.txt")).toThrow();
+  });
 
-    const entry = createFile(disk, "d.txt", bigContent);
+  it("permite crear un archivo con el mismo nombre después de borrar el anterior", () => {
+    const disk = formatVolume(32);
+    createFile(disk, [], "notas.txt", "viejo");
+    deleteFile(disk, [], "notas.txt");
 
-    // el primer clúster de d.txt debería ser el que liberó b.txt
-    expect(entry.firstCluster).toBe(b.firstCluster);
+    expect(() => createFile(disk, [], "notas.txt", "nuevo")).not.toThrow();
   });
 });

@@ -1,26 +1,22 @@
 // src/operations/createFolder.ts
 
 import type { VirtualDisk, DirectoryEntry } from "../models/virtualDisk";
-import { resolveDirectory } from "../utils/pathResolver";
+import { listDirectory, saveDirectory } from "../utils/pathResolver";
+import { writeDirectoryContent } from "../utils/directoryIO";
 
 export function createFolder(disk: VirtualDisk, path: string[], name: string): DirectoryEntry {
-  const entries = resolveDirectory(disk, path);
-
-  const existing = entries.find((e) => e.name === name && !e.isDeleted);
-  if (existing) {
+  const entries = listDirectory(disk, path);
+  if (entries.find((e) => e.name === name && !e.isDeleted)) {
     throw new Error(`Ya existe "${name}" en esta carpeta`);
   }
 
   const folder: DirectoryEntry = {
-    name,
-    isDirectory: true,
-    firstCluster: -1,
-    sizeInBytes: 0,
-    isDeleted: false,
-    createdAt: Date.now(),
-    children: [],
+    name, isDirectory: true, firstCluster: -1, sizeInBytes: 0, isDeleted: false, createdAt: Date.now(),
   };
 
+  writeDirectoryContent(disk, folder, []); // reserva su propio clúster con listado vacío
+
   entries.push(folder);
+  saveDirectory(disk, path, entries);
   return folder;
 }
