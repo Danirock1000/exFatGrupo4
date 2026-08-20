@@ -65,3 +65,33 @@ export function collectAllFiles(disk: VirtualDisk): DirectoryEntry[] {
   }
   return walk(readDirectoryContent(disk, disk.bootSector.firstClusterOfRootDirectory));
 }
+
+export interface TreeStats {
+  totalFiles: number;
+  totalFolders: number;
+  maxDepth: number;
+}
+
+export function collectTreeStats(disk: VirtualDisk): TreeStats {
+  function walk(entries: DirectoryEntry[], depth: number): TreeStats {
+    let stats: TreeStats = { totalFiles: 0, totalFolders: 0, maxDepth: depth };
+
+    for (const e of entries) {
+      if (e.isDeleted) continue;
+
+      if (e.isDirectory) {
+        stats.totalFolders += 1;
+        const childStats = walk(readDirectoryContent(disk, e.firstCluster), depth + 1);
+        stats.totalFiles += childStats.totalFiles;
+        stats.totalFolders += childStats.totalFolders;
+        stats.maxDepth = Math.max(stats.maxDepth, childStats.maxDepth);
+      } else {
+        stats.totalFiles += 1;
+      }
+    }
+
+    return stats;
+  }
+
+  return walk(readDirectoryContent(disk, disk.bootSector.firstClusterOfRootDirectory), 0);
+}

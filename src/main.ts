@@ -13,7 +13,8 @@ import {
 } from "./diskService";
 import { readFile } from "./operations/readFile";
 import { getClusterChain } from "./utils/clusterChain";
-import { listDirectory, collectAllFiles } from "./utils/pathResolver";
+import { listDirectory, collectAllFiles, collectTreeStats } from "./utils/pathResolver";
+import { summarizeFragmentation } from "./utils/fragmentation";
 import { exportDiskToFile, importDiskFromFile } from "./persistence/exportImport";
 import { saveDisk } from "./persistence/persistence";
 
@@ -24,10 +25,10 @@ let editingFileName: string | null = null;
 let renamingFolderName: string | null = null;
 
 const FILE_COLORS = [
-  "#378ADD", "#D85A30", "#639922", "#BA7517", "#993556", "#534AB7",
+  "#4C8DFF", "#F0997B", "#5DCAA5", "#EF9F27", "#ED93B1", "#AFA9EC",
 ];
-const RESERVED_COLOR = "#888780";
-const FREE_COLOR = "#5DCAA5";
+const RESERVED_COLOR = "#3a3f4b";
+const FREE_COLOR = "#1e3a2e";
 
 // ---------------------------------------------------------------------
 // Init
@@ -66,6 +67,7 @@ async function init() {
   updateCapacityPreview();
 
   document.getElementById("reformat-btn")!.addEventListener("click", handleReformat);
+  document.getElementById("editor-delete")!.addEventListener("click", handleEditorDelete);
 }
 
 function setupTabs() {
@@ -192,10 +194,6 @@ async function handleConfirmRename() {
 // Borrar archivo / carpeta
 // ---------------------------------------------------------------------
 
-async function handleDeleteFile(name: string) {
-  await deleteFileAndSave(disk, currentPath, name);
-  render();
-}
 
 async function handleDeleteFolder(name: string) {
   await deleteFolderAndSave(disk, currentPath, name);
@@ -206,11 +204,12 @@ async function handleDeleteFolder(name: string) {
 // Editor de archivo (.txt)
 // ---------------------------------------------------------------------
 
+
 function openEditor(name: string) {
   editingFileName = name;
   const content = readFile(disk, currentPath, name);
 
-  document.getElementById("editor-title")!.textContent = name;
+  (document.getElementById("editor-name") as HTMLInputElement).value = name;
   (document.getElementById("editor-content") as HTMLTextAreaElement).value = content;
   document.getElementById("editor-error")!.textContent = "";
   document.getElementById("editor-overlay")!.classList.add("open");
@@ -224,16 +223,33 @@ function closeEditor() {
 async function handleSave() {
   if (!editingFileName) return;
 
+  const nameInput = document.getElementById("editor-name") as HTMLInputElement;
+  const newName = nameInput.value;
   const newContent = (document.getElementById("editor-content") as HTMLTextAreaElement).value;
   const errorEl = document.getElementById("editor-error")!;
 
   try {
+    if (newName !== editingFileName) {
+      await renameEntryAndSave(disk, currentPath, editingFileName, newName);
+      editingFileName = newName;
+    }
     await writeFileAndSave(disk, currentPath, editingFileName, newContent);
     closeEditor();
     render();
   } catch (err) {
     errorEl.textContent = (err as Error).message;
   }
+}
+
+async function handleEditorDelete() {
+  if (!editingFileName) return;
+
+  const confirmed = confirm(`¿Borrar "${editingFileName}"? Esta acción no se puede deshacer.`);
+  if (!confirmed) return;
+
+  await deleteFileAndSave(disk, currentPath, editingFileName);
+  closeEditor();
+  render();
 }
 
 // ---------------------------------------------------------------------
@@ -311,11 +327,116 @@ async function handleReformat() {
 // ---------------------------------------------------------------------
 
 function render() {
+  renderVolumeInfo();
+  renderUsage();
+  renderTreeStats();
+  renderFragmentationSummary();
   renderBreadcrumb();
   renderFileList();
   renderFolderTree();
   renderBitmap();
   renderFatChains();
+}
+
+function renderVolumeInfo() {
+  const dl = document.getElementById("volume-info")!;
+  dl.innerHTML = "";
+
+  const bs = disk.bootSector;
+  const fields: [string, string][] = [
+    ["Etiqueta de volumen", bs.volumeLabel],
+    ["Bytes por sector", String(bs.bytesPerSector)],
+    ["Sectores por clúster", String(bs.sectorsPerCluster)],
+    ["Bytes por clúster", String(bs.bytesPerSector * bs.sectorsPerCluster)],
+    ["Cantidad total de clústeres", String(bs.clusterCount)],
+    ["Offset de la región FAT", String(bs.fatOffset)],
+    ["Longitud de la FAT", String(bs.fatLength)],
+    ["Offset del cluster heap", String(bs.clusterHeapOffset)],
+    ["Primer clúster del directorio raíz", String(bs.firstClusterOfRootDirectory)],
+  ];
+
+  for (const [label, value] of fields) {
+    const dt = document.createElement("dt");
+    dt.textContent = label;
+    const dd = document.createElement("dd");
+    dd.textContent = value;
+    dl.appendChild(dt);
+    dl.appendChild(dd);
+  }
+}
+
+function renderUsage() {
+  const clusterSizeBytes = disk.bootSector.bytesPerSector * disk.bootSector.sectorsPerCluster;
+  const totalClusters = disk.bitmap.length;
+  const usedClusters = disk.bitmap.filter(Boolean).length;
+  const percent = totalClusters === 0 ? 0 : Math.round((usedClusters / totalClusters) * 100);
+
+  (document.getElementById("usage-bar-fill") as HTMLElement).style.width = `${percent}%`;
+
+  const usedBytes = usedClusters * clusterSizeBytes;
+  const totalBytes = totalClusters * clusterSizeBytes;
+
+  document.getElementById("usage-text")!.textContent =
+    `${formatBytes(usedBytes)} usados de ${formatBytes(totalBytes)} (${percent}%) — ` +
+    `${usedClusters} de ${totalClusters} clústeres`;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function renderTreeStats() {
+  const dl = document.getElementById("tree-stats")!;
+  dl.innerHTML = "";
+
+  const stats = collectTreeStats(disk);
+
+  const fields: [string, string][] = [
+    ["Total de archivos", String(stats.totalFiles)],
+    ["Total de carpetas", String(stats.totalFolders)],
+    ["Profundidad máxima", `${stats.maxDepth} nivel${stats.maxDepth === 1 ? "" : "es"}`],
+  ];
+
+  for (const [label, value] of fields) {
+    const dt = document.createElement("dt");
+    dt.textContent = label;
+    const dd = document.createElement("dd");
+    dd.textContent = value;
+    dl.appendChild(dt);
+    dl.appendChild(dd);
+  }
+}
+
+function renderFragmentationSummary() {
+  const dl = document.getElementById("fragmentation-summary")!;
+  dl.innerHTML = "";
+
+  const allFiles = collectAllFiles(disk);
+  const summary = summarizeFragmentation(disk, allFiles);
+
+  const fields: [string, string][] = [
+    ["Total de archivos", String(summary.totalFiles)],
+    ["Contiguos", String(summary.contiguousFiles)],
+    ["Fragmentados", String(summary.fragmentedFiles)],
+    ["Fragmentos promedio por archivo", summary.averageFragments.toFixed(2)],
+    [
+      "Archivo más fragmentado",
+      summary.mostFragmented
+        ? `${summary.mostFragmented.name} (${summary.mostFragmented.fragmentCount} fragmentos)`
+        : "— (sin fragmentación)",
+    ],
+  ];
+
+  for (const [label, value] of fields) {
+    const dt = document.createElement("dt");
+    dt.textContent = label;
+    const dd = document.createElement("dd");
+    dd.textContent = value;
+    dl.appendChild(dt);
+    dl.appendChild(dd);
+  }
 }
 
 function renderBreadcrumb() {
@@ -331,7 +452,10 @@ function renderBreadcrumb() {
   el.appendChild(rootSpan);
 
   currentPath.forEach((segment, i) => {
-    el.appendChild(document.createTextNode(" / "));
+    const sep = document.createElement("i");
+    sep.className = "ti ti-chevron-right breadcrumb-sep";
+    el.appendChild(sep);
+
     const span = document.createElement("span");
     span.textContent = segment;
     span.onclick = () => navigateTo(currentPath.slice(0, i + 1));
@@ -348,9 +472,8 @@ function renderFileList() {
   for (const entry of entries) {
     const li = document.createElement("li");
 
-    const icon = document.createElement("span");
-    icon.className = "entry-icon";
-    icon.textContent = entry.isDirectory ? "📁" : "📄";
+    const icon = document.createElement("i");
+    icon.className = entry.isDirectory ? "ti ti-folder entry-icon" : "ti ti-file-text entry-icon";
     li.appendChild(icon);
 
     if (entry.isDirectory) {
@@ -361,29 +484,23 @@ function renderFileList() {
       li.appendChild(nameBtn);
 
       const renameBtn = document.createElement("button");
-      renameBtn.textContent = "Renombrar";
+      renameBtn.innerHTML = `<i class="ti ti-edit"></i>`;
+      renameBtn.title = "Renombrar";
       renameBtn.onclick = () => openRenameModal(entry.name);
       li.appendChild(renameBtn);
 
       const deleteBtn = document.createElement("button");
-      deleteBtn.textContent = "Borrar";
+      deleteBtn.innerHTML = `<i class="ti ti-trash"></i>`;
+      deleteBtn.title = "Borrar";
       deleteBtn.onclick = () => handleDeleteFolder(entry.name);
       li.appendChild(deleteBtn);
-    } else {
-      const nameSpan = document.createElement("span");
-      nameSpan.textContent = `${entry.name} — ${entry.sizeInBytes} bytes — clúster ${entry.firstCluster}`;
-      li.appendChild(nameSpan);
-
-      const editBtn = document.createElement("button");
-      editBtn.textContent = "Editar";
-      editBtn.onclick = () => openEditor(entry.name);
-      li.appendChild(editBtn);
-
-      const deleteBtn = document.createElement("button");
-      deleteBtn.textContent = "Borrar";
-      deleteBtn.onclick = () => handleDeleteFile(entry.name);
-      li.appendChild(deleteBtn);
-    }
+} else {
+  const nameSpan = document.createElement("span");
+  nameSpan.textContent = `${entry.name} — ${entry.sizeInBytes} bytes — clúster ${entry.firstCluster}`;
+  nameSpan.style.cursor = "pointer";
+  nameSpan.onclick = () => openEditor(entry.name);
+  li.appendChild(nameSpan);
+}
 
     list.appendChild(li);
   }
@@ -394,6 +511,12 @@ function renderFolderTree() {
   container.innerHTML = "";
 
   const rootFolders = listDirectory(disk, []).filter((e) => e.isDirectory && !e.isDeleted);
+
+  if (rootFolders.length === 0) {
+    container.innerHTML = `<div class="folder-tree-empty">Sin carpetas todavía.</div>`;
+    return;
+  }
+
   container.appendChild(buildFolderTreeNode(rootFolders, []));
 }
 
@@ -409,9 +532,14 @@ function buildFolderTreeNode(folders: DirectoryEntry[], parentPath: string[]): H
     row.className = "folder-tree-row";
     if (arraysEqual(itemPath, currentPath)) row.classList.add("active");
 
+    const subfolders = listDirectory(disk, itemPath).filter((e) => e.isDirectory && !e.isDeleted);
+    const hasChildren = subfolders.length > 0;
+    let expanded = false;
+
     const toggle = document.createElement("span");
     toggle.className = "folder-tree-toggle";
-    toggle.textContent = "▸";
+    toggle.innerHTML = hasChildren ? `<i class="ti ti-chevron-right"></i>` : "";
+    toggle.style.visibility = hasChildren ? "visible" : "hidden";
 
     const label = document.createElement("span");
     label.className = "folder-tree-label";
@@ -426,23 +554,14 @@ function buildFolderTreeNode(folders: DirectoryEntry[], parentPath: string[]): H
     childrenContainer.style.display = "none";
     li.appendChild(childrenContainer);
 
-    let expanded = false;
     toggle.onclick = () => {
       expanded = !expanded;
-      toggle.textContent = expanded ? "▾" : "▸";
+      toggle.innerHTML = `<i class="ti ${expanded ? "ti-chevron-down" : "ti-chevron-right"}"></i>`;
       childrenContainer.style.display = expanded ? "block" : "none";
 
       if (expanded && childrenContainer.childElementCount === 0) {
-        const subfolders = listDirectory(disk, itemPath).filter(
-          (e) => e.isDirectory && !e.isDeleted
-        );
         if (subfolders.length > 0) {
           childrenContainer.appendChild(buildFolderTreeNode(subfolders, itemPath));
-        } else {
-          const empty = document.createElement("div");
-          empty.className = "folder-tree-empty";
-          empty.textContent = "sin subcarpetas";
-          childrenContainer.appendChild(empty);
         }
       }
     };
@@ -477,8 +596,7 @@ function renderBitmap() {
 
   disk.bitmap.forEach((occupied, id) => {
     const cell = document.createElement("div");
-    cell.style.width = "24px";
-    cell.style.height = "24px";
+    cell.className = "bitmap-cell";
 
     if (id < 2) {
       cell.style.backgroundColor = RESERVED_COLOR;
@@ -563,5 +681,7 @@ function renderFatChains() {
     container.appendChild(row);
   }
 }
+
+
 
 init();

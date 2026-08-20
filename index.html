@@ -4,6 +4,7 @@
   <head>
     <meta charset="UTF-8" />
     <title>Simulador exFAT</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css" />
     <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body>
@@ -18,7 +19,7 @@
     <!-- ============ EXPLORADOR ============ -->
     <div id="tab-explorer" class="tab-panel active">
       <div class="explorer-topbar">
-        <button id="back-btn" class="icon-btn" title="Atrás">←</button>
+<button id="back-btn" class="icon-btn" title="Atrás"><i class="ti ti-chevron-left"></i></button>        
         <div id="breadcrumb" class="breadcrumb"></div>
       </div>
 
@@ -30,8 +31,8 @@
 
         <main class="explorer-main">
           <div class="explorer-actions">
-            <button id="open-create-folder-btn">+ Carpeta</button>
-            <button id="open-create-file-btn">+ Archivo</button>
+<button id="open-create-folder-btn"><i class="ti ti-folder-plus"></i> Carpeta</button>
+<button id="open-create-file-btn"><i class="ti ti-file-plus"></i> Archivo</button>
           </div>
           <p id="error-message" class="error-text"></p>
           <ul id="file-list"></ul>
@@ -40,46 +41,81 @@
     </div>
 
     <!-- ============ CONFIGURACIÓN DE DISCO ============ -->
-    <div id="tab-disk" class="tab-panel">
-      <section>
-        <h2>Formatear volumen</h2>
 
-        <label for="capacity-input">Capacidad</label>
-        <div class="format-row">
-          <input id="capacity-input" type="number" value="1024" min="16" />
-          <select id="capacity-unit">
-            <option value="1024">KB</option>
-            <option value="1048576" selected>MB</option>
-          </select>
-        </div>
+<div id="tab-disk" class="tab-panel">
+  <div class="disk-group">
+  <h2 class="disk-group-title">Panorama general</h2>
 
-        <label for="allocation-unit-select">Tamaño de unidad de asignación</label>
-        <select id="allocation-unit-select">
-          <option value="512">512 bytes</option>
-          <option value="1024">1024 bytes</option>
-          <option value="2048">2048 bytes</option>
-          <option value="4096" selected>4096 bytes</option>
-          <option value="8192">8192 bytes</option>
-          <option value="16384">16 kilobytes</option>
-          <option value="32768">32 kilobytes</option>
-          <option value="65536">64 kilobytes</option>
-        </select>
-
-        <p id="capacity-preview"></p>
-        <button id="reformat-btn">Iniciar formateo (borra todo)</button>
-      </section>
-
-      <section>
-        <h2>Bitmap de clústeres</h2>
-        <div id="bitmap-grid"></div>
-        <div id="bitmap-legend"></div>
-      </section>
-
-      <section>
-        <h2>Cadena FAT por archivo</h2>
-        <div id="fat-chains"></div>
-      </section>
+  <section class="usage-section">
+    <h3>Uso del disco</h3>
+    <div id="usage-bar-track">
+      <div id="usage-bar-fill"></div>
     </div>
+    <p id="usage-text"></p>
+  </section>
+
+  <div class="disk-stats-grid">
+    <section class="stat-card">
+      <h3>Información del volumen</h3>
+      <dl id="volume-info" class="info-grid"></dl>
+    </section>
+
+    <section class="stat-card">
+      <h3>Contenido del disco</h3>
+      <dl id="tree-stats" class="info-grid"></dl>
+    </section>
+
+    <section class="stat-card">
+      <h3>Fragmentación</h3>
+      <dl id="fragmentation-summary" class="info-grid"></dl>
+    </section>
+  </div>
+</div>
+
+  <div class="disk-group">
+    <h2 class="disk-group-title">Formatear volumen</h2>
+    <section class="format-section">
+      <label for="capacity-input">Capacidad</label>
+      <div class="format-row">
+        <input id="capacity-input" type="number" value="1024" min="16" />
+        <select id="capacity-unit">
+          <option value="1024">KB</option>
+          <option value="1048576" selected>MB</option>
+        </select>
+      </div>
+
+      <label for="allocation-unit-select">Tamaño de unidad de asignación</label>
+      <select id="allocation-unit-select">
+        <option value="512">512 bytes</option>
+        <option value="1024">1024 bytes</option>
+        <option value="2048">2048 bytes</option>
+        <option value="4096" selected>4096 bytes</option>
+        <option value="8192">8192 bytes</option>
+        <option value="16384">16 kilobytes</option>
+        <option value="32768">32 kilobytes</option>
+        <option value="65536">64 kilobytes</option>
+      </select>
+
+      <p id="capacity-preview"></p>
+      <button id="reformat-btn">Iniciar formateo (borra todo)</button>
+    </section>
+  </div>
+
+  <div class="disk-group">
+    <h2 class="disk-group-title">Visualización</h2>
+
+    <section>
+      <h3>Bitmap de clústeres</h3>
+      <div id="bitmap-grid"></div>
+      <div id="bitmap-legend"></div>
+    </section>
+
+    <section>
+      <h3>Cadena FAT por archivo</h3>
+      <div id="fat-chains"></div>
+    </section>
+  </div>
+</div>
 
     <!-- ============ RESPALDO ============ -->
     <div id="tab-backup" class="tab-panel">
@@ -131,17 +167,20 @@
       </div>
     </div>
 
-    <div id="editor-overlay" class="modal-overlay">
-      <div id="editor-box" class="modal-box">
-        <h3 id="editor-title"></h3>
-        <textarea id="editor-content"></textarea>
-        <p id="editor-error" class="error-text"></p>
-        <div class="modal-actions">
-          <button id="editor-cancel">Cancelar</button>
-          <button id="editor-save">Guardar</button>
-        </div>
+<div id="editor-overlay" class="modal-overlay">
+  <div id="editor-box" class="modal-box">
+    <input id="editor-name" type="text" />
+    <textarea id="editor-content"></textarea>
+    <p id="editor-error" class="error-text"></p>
+    <div class="modal-actions modal-actions-split">
+      <button id="editor-delete" class="danger-btn"><i class="ti ti-trash"></i> Borrar</button>
+      <div class="modal-actions-right">
+        <button id="editor-cancel">Cancelar</button>
+        <button id="editor-save">Guardar</button>
       </div>
     </div>
+  </div>
+</div>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

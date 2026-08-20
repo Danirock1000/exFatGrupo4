@@ -12,8 +12,6 @@ import { renameEntry } from "./operations/renameEntry";
 
 const DEFAULT_CLUSTER_COUNT = 32;
 
-
-
 // Carga el disco guardado si existe; si no, formatea uno nuevo.
 export async function loadOrInitDisk(): Promise<VirtualDisk> {
   const stored = await loadDisk();
